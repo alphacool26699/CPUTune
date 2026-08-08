@@ -5,6 +5,17 @@ jobs:
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
+
+      - name: Environment
+        run: |
+          echo "--- xcode ---"
+          xcodebuild -version
+          echo "--- SDKs ---"
+          xcodebuild -showsdks | grep -i macos
+
+      - name: Inspect project
+        run: xcodebuild -project CPUTuneCore/CPUTuneCore.xcodeproj -list
+
       - name: Build
         run: |
           xcodebuild -project CPUTuneCore/CPUTuneCore.xcodeproj \
@@ -12,14 +23,23 @@ jobs:
             ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO \
             MACOSX_DEPLOYMENT_TARGET=12.0 \
             CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
-            -derivedDataPath build
+            SYMROOT=$PWD/build
+
       - name: Package
         run: |
           KEXT=$(find build -name "CPUTuneCore.kext" | head -1)
+          if [ -z "$KEXT" ]; then
+            echo "No kext produced — build tree follows:"
+            find build -maxdepth 3
+            exit 1
+          fi
           echo "Found: $KEXT"
+          echo "--- architecture ---"
           lipo -info "$KEXT/Contents/MacOS/CPUTuneCore"
+          echo "--- KPI versions ---"
           plutil -p "$KEXT/Contents/Info.plist" | grep -A5 OSBundleLibraries
           tar -czpf cputune.tar.gz -C "$(dirname "$KEXT")" CPUTuneCore.kext
+
       - uses: actions/upload-artifact@v4
         with:
           name: cputune

@@ -1,0 +1,26 @@
+name: Build CPUTune
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          xcodebuild -project CPUTuneCore/CPUTuneCore.xcodeproj \
+            -configuration Release \
+            ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO \
+            MACOSX_DEPLOYMENT_TARGET=12.0 \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath build
+      - name: Package
+        run: |
+          KEXT=$(find build -name "CPUTuneCore.kext" | head -1)
+          echo "Found: $KEXT"
+          lipo -info "$KEXT/Contents/MacOS/CPUTuneCore"
+          plutil -p "$KEXT/Contents/Info.plist" | grep -A5 OSBundleLibraries
+          tar -czpf cputune.tar.gz -C "$(dirname "$KEXT")" CPUTuneCore.kext
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cputune
+          path: cputune.tar.gz
